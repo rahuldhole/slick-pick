@@ -1,0 +1,202 @@
+# ##########################################################
+# Dockerfile for Developer Tools.
+# Description: This Dockerfile is for adding a devtools stage.
+#
+# Author information:
+# Name: Rahul Dhole
+# Email: rdhole95@gmail.com
+# GitHub: https://github.com/rahuldhole
+#
+# Dockerfile description:
+# - The devtools stage can be based on top of debian images.
+# - It has tmux, OhMyZSH, Powerlevel etc neccessary tools.
+# - For more details checkout my blog
+#  https://dev.to/rahuldhole/docker-devtools-stage-powerlevel-ohmyzsh-tmux-fuzzy-finder-autocomplete-etc-8g1
+# ###########################################################
+
+
+# TODO: PREQUISITES #########################################
+# 1. You need to install below nerd fonts `MesloLGSNF`
+# and set it as your terminal font. read my blog to know more.
+#
+# 2. Add users home directory as volume to save devtools settings
+# and terminal history.
+# ex. -v devtools-home:/home/<username> 
+#############################################################
+
+# IMPORTANT NOTES: ##########################################
+# 1. Use `p10k configure` command to reconfigure powerline UI.
+#
+# 2. You may customize ~/.zshrc ~/.tmux.conf and ~/.p10k.conf
+#
+# 3. Inside container now you may `su <ADMIN_USER>`
+# to do some admin tasks.
+#############################################################
+
+
+
+# TODO: Update user details
+ARG USERNAME=debian
+ARG ADMIN_USER=admin
+ARG ADMIN_PASSWORD=admin
+
+
+#! BASE ####################################################
+FROM node:slim as base
+
+ARG USERNAME
+ARG ADMIN_USER
+ARG ADMIN_PASSWORD
+
+## Define environment variables
+### TODO: at runtime mount source code directory as volume to /host-code
+ENV SOURCE_CODE_VOLUME_MOUNT="/host-code" \
+    WORKING_DIR="/app"
+
+## Setting up the work directory
+WORKDIR $WORKING_DIR
+RUN mkdir $SOURCE_CODE_VOLUME_MOUNT
+
+# Update ENVIRONMENT variable $PATH
+ENV PATH /app/node_modules/.bin:$PATH
+
+## Exposing server port
+EXPOSE 3000
+
+## create a non-root user for security
+RUN useradd -m -s /bin/bash $USERNAME
+
+
+
+
+
+#* DEVTOOLS ################################################
+FROM base as devtools
+ARG USERNAME
+ARG ADMIN_USER
+ARG ADMIN_PASSWORD
+
+## Install devtools
+RUN apt update && apt-get -y --no-install-recommends install rsync procps nano zsh curl tmux fontconfig git ca-certificates \
+    build-essential # Add build essentials for compiling code
+
+## Add admin user
+RUN useradd ${ADMIN_USER} && \
+    echo "${ADMIN_USER}:${ADMIN_PASSWORD}" | chpasswd && \
+    apt-get update && \
+    apt-get -y --no-install-recommends install sudo && \
+    echo "${ADMIN_USER} ALL=(ALL) ALL" >> /etc/sudoers
+
+## User settings
+
+### Set default ZSH
+RUN chsh -s /bin/zsh $USERNAME
+
+### select User
+USER $USERNAME
+
+### Install tmux plugins and theme
+RUN git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm && \
+    touch ~/.tmux.conf && \
+    echo 'set -g default-terminal "screen-256color"' >> ~/.tmux.conf && \
+    echo '#Toggle status bar by Prefix+I (default ctrl+b+I)' >> ~/.tmux.conf && \
+    echo 'bind b run-shell "tmux setw -g status \$(tmux show -g -w status | grep -q off && echo on || echo off)"' >> ~/.tmux.conf && \
+    echo 'set -g mouse on' >> ~/.tmux.conf && \
+    echo 'set -g @plugin "tmux-plugins/tpm"' >> ~/.tmux.conf && \
+    echo 'set -g @plugin "tmux-plugins/tmux-resurrect"' >> ~/.tmux.conf && \
+    echo 'set -g @plugin "jimeh/tmux-themepack"' >> ~/.tmux.conf && \
+    echo 'set -g @themepack "powerline/double/green"' >> ~/.tmux.conf && \
+    echo 'run-shell "~/.tmux/plugins/tpm/tpm"' >> ~/.tmux.conf && \
+    ~/.tmux/plugins/tpm/bin/install_plugins
+
+### Install Oh My Zsh
+RUN sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
+RUN git clone --depth=1 https://github.com/romkatv/powerlevel10k.git \
+    ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k && \
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git \
+    ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting && \
+    git clone https://github.com/zsh-users/zsh-autosuggestions \
+    ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions && \
+    git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf && ~/.fzf/install --all
+
+RUN sed -i -e 's/ZSH_THEME="robbyrussell"/ZSH_THEME="powerlevel10k\/powerlevel10k"/' ~/.zshrc && \
+    sed -i -e 's/plugins=(git)/plugins=(git zsh-syntax-highlighting zsh-autosuggestions fzf tmux)/' ~/.zshrc && \
+    echo 'export PATH="$PATH:/home/rails/.local/bin"' >> ~/.zshrc && \
+    echo 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD=true' >> ~/.zshrc
+
+## Solve nerd font font issue
+USER root
+RUN apt-get install -y --no-install-recommends locales && \
+    locale-gen en_US.UTF-8 && \
+    sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    update-locale LANG=en_US.UTF-8
+
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8 \
+    TERM=xterm-256color
+
+## Install additional tools
+RUN apt-get -y --no-install-recommends install \
+    vim \
+    less \
+    htop \
+    wget \
+    tree
+
+### Clear cache
+RUN rm -rf /var/lib/apt/lists/*
+
+## Use rsync to sync host's source code
+### Create rsync script
+RUN echo '#!/bin/bash' > /usr/local/bin/rsync_source \
+    && echo 'rsync -ha --exclude=log --exclude=public/packs --exclude=node_modules --exclude=tmp --exclude=.git --exclude=mysql --exclude=.env "${SOURCE_CODE_VOLUME_MOUNT}/." "${WORKING_DIR}/."' >> /usr/local/bin/rsync_source \
+    && chmod +x /usr/local/bin/rsync_source
+
+### Set up continuous sync loop
+RUN echo '#!/bin/bash' > /usr/local/bin/dev_sync.sh \
+    && echo 'while true; do /usr/local/bin/rsync_source; echo "sources synced."; sleep 3; done' >> /usr/local/bin/dev_sync.sh \
+    && chmod +x /usr/local/bin/dev_sync.sh
+
+### Define dev_sync and dev_sync_kill commands
+RUN echo '#!/bin/bash' > /usr/local/bin/dev_sync \
+    && echo '/usr/local/bin/dev_sync.sh > /dev/null 2>&1 &' >> /usr/local/bin/dev_sync \
+    && echo '#!/bin/bash' > /usr/local/bin/dev_sync_kill \
+    && echo 'pkill -f "/usr/local/bin/dev_sync.sh"' >> /usr/local/bin/dev_sync_kill \
+    && chmod +x /usr/local/bin/dev_sync /usr/local/bin/dev_sync_kill
+
+USER $USERNAME
+CMD ["/bin/zsh"]
+
+
+
+
+
+#? DEVELOPMENT ############################################
+FROM devtools as development
+ARG USERNAME
+
+## Declaring env
+ENV NODE_ENV development
+
+COPY --chown=$USERNAME:$USERNAME package.json package-lock.json ./
+
+## Authorize
+USER root
+RUN chmod ugo+rwx package-lock.json
+RUN chown -R $USERNAME:$USERNAME ./
+
+USER $USERNAME
+
+## Installing dependencies
+RUN npm install
+
+## Copy application code
+COPY --chown=$USERNAME:$USERNAME . ./
+
+## Starting our application
+## CMD [ "nodemon", "index.js" ]
+## CMD [ "node", "index.js" ]
+

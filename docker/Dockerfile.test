@@ -1,0 +1,39 @@
+# syntax = docker/dockerfile:1
+
+#! BASE ####################################################
+FROM node:slim as base
+
+## Setting up the work directory
+WORKDIR /app
+
+# Update ENVIRONMENT variable $PATH
+ENV PATH /app/node_modules/.bin:$PATH
+
+## Exposing server port
+EXPOSE 3000
+
+
+#? TEST ####################################################
+## Use an official Node.js runtime as the base image
+FROM base as test
+
+## Declaring env
+ENV NODE_ENV test
+
+## Copy package file
+USER root
+COPY package.json package-lock.json ./
+RUN chmod ugo+rwx package-lock.json
+RUN chown -R node:node ./
+USER node
+
+## Installing dependencies for running tests
+RUN npm install
+RUN npm install --save-test mocha chai chai-http
+
+## Copy application code
+COPY . .
+
+## Run your tests using a command (e.g., Mocha or Jest)
+CMD ["npm", "test"]
+
