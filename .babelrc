@@ -1,4 +1,5 @@
 {
+  "presets": ["@babel/preset-react"], // for handling JSX 
   "plugins": [
     ["@babel/plugin-proposal-decorators", { "legacy": true }],
     ["@babel/plugin-proposal-class-properties", { "loose": true }],
