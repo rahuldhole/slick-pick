@@ -1,5 +1,5 @@
 import { Schema } from './Schema';
-import { runMigrations } from './Migrate';
+import MigrationManager from './bin/MigrationManager';
 
 export default function db(version = 1) {
   const defaultIDBVersion = 1;
@@ -55,6 +55,26 @@ export default function db(version = 1) {
       });
     });
   }
+
+  function runMigrations(dbInstance) {
+    const migrationManager = new MigrationManager(dbInstance);
+
+    const fromNumber = dbInstance.version;
+    const toNumber = Schema.version;
+
+    // Perform migrations
+    migrationManager.migrate(fromNumber, toNumber)
+      .then(result => {
+        if (result === false) {
+          console.log("Migration already up-to-date.");
+        } else {
+          console.log("Migration completed successfully.");
+        }
+      })
+      .catch(error => {
+        console.error("Error occurred during migration:", error);
+      });
+  }
 }
 
 
@@ -63,12 +83,12 @@ export function deleteDb() {
   return new Promise((resolve, reject) => {
     const request = window.indexedDB.deleteDatabase(Schema.dbName);
 
-    request.onerror = function(event) {
+    request.onerror = function (event) {
       console.error("Error deleting database:", event.target.error);
       reject(event.target.error);
     };
 
-    request.onsuccess = function(event) {
+    request.onsuccess = function (event) {
       console.log("Database deleted successfully");
       resolve();
     };

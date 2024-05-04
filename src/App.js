@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import logo from './logo.svg';
 import './App.css';
-// import db from './db';
-import { TestMigrate } from './db/Migrate'
+import db from './db';
+import Migrate from './db/services/Migrate'
 
 
 function App() {
@@ -11,12 +11,10 @@ function App() {
   useEffect(() => {
     const getDBVersion = async () => {
       try {
-        // const dbInstance = await db();
-        // setDbVersion(dbInstance.version); 
+        const dbInstance = await db();
+        setDbVersion(dbInstance.version); 
 
-
-        TestMigrate();
-        // console.log("TestMigrate: ", )
+        console.log("TestMigrate: ", Migrate())
       } catch (error) {
         console.error('Error:', error);
       }
