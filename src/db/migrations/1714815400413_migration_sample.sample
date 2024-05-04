@@ -1,0 +1,17 @@
+// Get current time integer as prefix: new Date().getTime()
+export async function runMigration(db) {
+  const tx = db.transaction(['priorities'], 'readwrite');
+  const store = tx.objectStore('priorities');
+  const cursor = await store.openCursor();
+
+  while (cursor) {
+    const { value } = cursor;
+    if (!value.created_at) {
+      value.created_at = new Date().toISOString();
+      cursor.update(value);
+    }
+    cursor.continue();
+  }
+
+  await tx.done;
+}

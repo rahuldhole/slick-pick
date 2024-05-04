@@ -1,23 +1,32 @@
+import { useEffect, useState } from 'react';
 import logo from './logo.svg';
 import './App.css';
+import db from './db';
 
 function App() {
+  const [dbVersion, setDbVersion] = useState(null);
+
+  useEffect(() => {
+    const getDBVersion = async () => {
+      try {
+        const dbInstance = await db();
+        setDbVersion(dbInstance.version); 
+      } catch (error) {
+        console.error('Error initializing database:', error);
+      }
+    };
+
+    getDBVersion();
+
+    return () => {
+      // Cleanup code here
+    };
+  }, []);
+
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <h1>Hello World!</h1>
+      {dbVersion && <p>Database Version: {dbVersion}</p>}
     </div>
   );
 }
