@@ -1,6 +1,6 @@
 export const Schema = {
   dbName: "slickPickDB",
-  version: 2,
+  version: 1714815400414,
   tables: [
     {
       name: 'priorities',

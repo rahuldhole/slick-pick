@@ -1,5 +1,5 @@
 import { Schema } from './Schema';
-import runMigrations from './migrations';
+import { runMigrations } from './Migrate';
 
 export default function db(version = 1) {
   const defaultIDBVersion = 1;

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import logo from './logo.svg';
 import './App.css';
-import db from './db';
+// import db from './db';
+import { TestMigrate } from './db/Migrate'
+
 
 function App() {
   const [dbVersion, setDbVersion] = useState(null);
@@ -9,10 +11,14 @@ function App() {
   useEffect(() => {
     const getDBVersion = async () => {
       try {
-        const dbInstance = await db();
-        setDbVersion(dbInstance.version); 
+        // const dbInstance = await db();
+        // setDbVersion(dbInstance.version); 
+
+
+        TestMigrate();
+        // console.log("TestMigrate: ", )
       } catch (error) {
-        console.error('Error initializing database:', error);
+        console.error('Error:', error);
       }
     };
 
