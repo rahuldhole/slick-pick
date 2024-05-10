@@ -1,11 +1,23 @@
+import DBUtils from './utils/DBUtils';
 import MigrationManager from './bin/MigrationManager';
 class IDBS {
   constructor(schema) {
     this.schema = schema;
+
     this.dbExists = false;
-    this.checkDBExists(this.schema.dbName)
+    DBUtils.checkDBExists(this.schema.dbName)
       .then(exists => {
         this.dbExists = exists;
+      });
+
+    this.current_version = null;
+    DBUtils.getDBVersion(this.schema.dbName)
+      .then(version => {
+        if (version !== null) {
+          this.current_version = version;
+        } else {
+          this.current_version = this.schema.version;
+        }
       });
   }
 
@@ -46,17 +58,6 @@ class IDBS {
     });
   }
 
-  checkDBExists(dbName) {
-    return window.indexedDB.databases()
-      .then(dbs => {
-        return dbs.some(db => db.name === dbName);
-      })
-      .catch(error => {
-        console.error('Error checking database existence:', error);
-        return false;
-      });
-  }
-
   createTables(dbInstance) {
     this.schema.tables.forEach(table => {
       const tableName = table.name;
@@ -71,20 +72,20 @@ class IDBS {
   runMigrations(dbInstance) {
     const migrationManager = new MigrationManager(dbInstance);
 
-    const fromNumber = dbInstance.version;
+    const fromNumber = this.current_version;
     const toNumber = this.schema.version;
 
     // Perform migrations
     migrationManager.migrate(fromNumber, toNumber)
-      .then(result => {
-        if (result === false) {
-          console.log("Migration already up-to-date.");
+      .then(success => {
+        if (success) {
+          console.log(`${this.dbInstance.name} Migration completed successfully.`);
         } else {
-          console.log("Migration completed successfully.");
+          console.log(`${this.dbInstance.name} Database is already up-to-date.`);
         }
       })
       .catch(error => {
-        console.error("Error occurred during migration:", error);
+        console.error(`${this.dbInstance.name} Error occurred during migration:`, error);
       });
   }
 
