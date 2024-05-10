@@ -1,31 +1,29 @@
-import { useEffect, useState } from 'react';
-import logo from './logo.svg';
+import { useState } from 'react';
 import './App.css';
-import db from './db';
-import Migrate from './db/services/Migrate'
-
+import { Schema } from './db/Schema';
+import IDBS from './db';
 
 function App() {
   const [dbVersion, setDbVersion] = useState(null);
 
-  useEffect(() => {
-    const getDBVersion = async () => {
-      try {
-        const dbInstance = await db();
-        setDbVersion(dbInstance.version); 
+  const idbs = new IDBS(Schema);
 
-        console.log("TestMigrate: ", Migrate())
-      } catch (error) {
-        console.error('Error:', error);
-      }
-    };
+  idbs.openDatabase()
+    .then(dbInstance => {
+      setDbVersion(dbInstance.version);
+    })
+    .catch(error => {
+      console.error('Error opening database:', error);
+    });
 
-    getDBVersion();
+  // idbs.destroy()
+  //   .then(() => {
+  //     console.log('Database deleted successfully');
+  //   })
+  //   .catch(error => {
+  //     console.error('Error deleting database:', error);
+  //   });
 
-    return () => {
-      // Cleanup code here
-    };
-  }, []);
 
   return (
     <div className="App">

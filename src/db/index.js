@@ -1,52 +1,64 @@
-import { Schema } from './Schema';
 import MigrationManager from './bin/MigrationManager';
+class IDBS {
+  constructor(schema) {
+    this.schema = schema;
+    this.dbExists = false;
+    this.checkDBExists(this.schema.dbName)
+      .then(exists => {
+        this.dbExists = exists;
+      });
+  }
 
-export default function db(version = 1) {
-  const defaultIDBVersion = 1;
+  openDatabase() {
+    return new Promise((resolve, reject) => {
+      let request = null;
 
-  return new Promise((resolve, reject) => {
-    let request = null;
+      const openRequest = () => {
+        request = window.indexedDB.open(this.schema.dbName, this.schema.version);
 
-    const openRequest = () => {
-      if (version === defaultIDBVersion) {
-        request = window.indexedDB.open(Schema.dbName);
-      } else {
-        request = window.indexedDB.open(Schema.dbName, version);
-      }
+        request.onerror = (event) => {
+          console.error("indexedDB is not supported", event.target.errorCode);
+          reject(event.target.errorCode);
+        };
 
-      request.onerror = function (event) {
-        console.error("indexedDB is not supported", event.target.errorCode);
-        reject(event.target.errorCode);
+        request.onsuccess = (event) => {
+          const dbInstance = event.target.result;
+          console.log("(s) indexedDB is loaded version", dbInstance.version);
+
+          resolve(dbInstance);
+        };
+
+        request.onupgradeneeded = (event) => {
+          const dbInstance = event.target.result;
+          console.log("(u) indexedDB is loaded version", dbInstance.version);
+
+          if (this.dbExists) {
+            this.runMigrations(dbInstance);
+          } else {
+            this.createTables(dbInstance);
+          }
+
+          resolve(dbInstance);
+        };
       };
 
-      request.onsuccess = function (event) {
-        const dbInstance = event.target.result;
-        console.log("(s) indexedDB is loaded version", dbInstance.version);
+      openRequest();
+    });
+  }
 
-        resolve(dbInstance);
-      };
+  checkDBExists(dbName) {
+    return window.indexedDB.databases()
+      .then(dbs => {
+        return dbs.some(db => db.name === dbName);
+      })
+      .catch(error => {
+        console.error('Error checking database existence:', error);
+        return false;
+      });
+  }
 
-      request.onupgradeneeded = function (event) {
-        const dbInstance = event.target.result;
-        console.log("(u) indexedDB is loaded version", dbInstance.version);
-
-        if (dbInstance.version === defaultIDBVersion) {
-          createTables(dbInstance);
-        } else {
-          runMigrations(dbInstance);
-        }
-
-        resolve(dbInstance);
-      };
-    };
-
-    openRequest();
-  });
-
-  // Private
-
-  function createTables(dbInstance) {
-    Schema.tables.forEach(table => {
+  createTables(dbInstance) {
+    this.schema.tables.forEach(table => {
       const tableName = table.name;
       const objectStore = dbInstance.createObjectStore(tableName, { keyPath: 'id', autoIncrement: true });
 
@@ -56,11 +68,11 @@ export default function db(version = 1) {
     });
   }
 
-  function runMigrations(dbInstance) {
+  runMigrations(dbInstance) {
     const migrationManager = new MigrationManager(dbInstance);
 
     const fromNumber = dbInstance.version;
-    const toNumber = Schema.version;
+    const toNumber = this.schema.version;
 
     // Perform migrations
     migrationManager.migrate(fromNumber, toNumber)
@@ -75,22 +87,24 @@ export default function db(version = 1) {
         console.error("Error occurred during migration:", error);
       });
   }
+
+  destroy() {
+    return new Promise((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase(this.schema.dbName);
+
+      request.onerror = (event) => {
+        console.error("Error deleting database:", event.target.error);
+        reject(event.target.error);
+      };
+
+      request.onsuccess = (event) => {
+        console.log("Database deleted successfully");
+        resolve();
+      };
+    });
+  }
+
+  // Add CRUD methods here
 }
 
-
-export function deleteDb() {
-  console.log("deleting db");
-  return new Promise((resolve, reject) => {
-    const request = window.indexedDB.deleteDatabase(Schema.dbName);
-
-    request.onerror = function (event) {
-      console.error("Error deleting database:", event.target.error);
-      reject(event.target.error);
-    };
-
-    request.onsuccess = function (event) {
-      console.log("Database deleted successfully");
-      resolve();
-    };
-  });
-}
+export default IDBS;
