@@ -1,20 +1,16 @@
-export default class Migration_1714815400414 {
-  async up() {
+import Migration from "../Migration";
+export default class ExampleTwo extends Migration{
+  static #_= this.newVersion(1714815400414);
+  
+  async migrate() {
     return new Promise((resolve, reject) => {
+      
       // Implement your migration logic for applying changes
-      console.log("Applying migration: 1714815400414", new Date().getTime());
-
-      // Resolve the promise when the migration is completed
-      resolve();
-    });
-  }
-
-  async down() {
-    return new Promise((resolve, reject) => {
-      // Implement your migration logic for reverting changes
-      console.log("Reverting migration: 1714815400414", new Date().getTime());
-
-      // Resolve the promise when the migration is completed
+      //...
+      console.log(`Applying migration: 1714815400414 on ${this.dbInstance.name}`);
+      
+      
+      
       resolve();
     });
   }

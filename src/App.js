@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import './App.css';
-import { Schema } from './db/Schema';
-import IDBS from './db';
+import IDBSuit from './db/IDBSuit'
+
+// import rough from './rough/main';
 
 function App() {
+
+  const idbs = IDBSuit();
+
   const [dbVersion, setDbVersion] = useState(null);
 
-  const idbs = new IDBS(Schema);
+  // const idbs = new IDBS(Schema, Migrations);
 
   idbs.openDatabase()
     .then(dbInstance => {

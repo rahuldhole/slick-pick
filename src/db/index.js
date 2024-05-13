@@ -1,28 +1,41 @@
 import DBUtils from './utils/DBUtils';
 import MigrationManager from './bin/MigrationManager';
 class IDBS {
-  constructor(schema) {
+  constructor(schema, migrations) {
     this.schema = schema;
-
-    this.dbExists = false;
-    DBUtils.checkDBExists(this.schema.dbName)
-      .then(exists => {
-        this.dbExists = exists;
-      });
-
-    this.current_version = null;
-    DBUtils.getDBVersion(this.schema.dbName)
-      .then(version => {
-        if (version !== null) {
-          this.current_version = version;
-        } else {
-          this.current_version = this.schema.version;
-        }
-      });
+    this.migrations = migrations;
+    this.migrationManager = new MigrationManager(migrations);
   }
 
-  openDatabase() {
-    return new Promise((resolve, reject) => {
+  async getCurrentVersion() {
+    const version = await DBUtils.getDBVersion(this.schema.dbName);
+    if (version !== null) {
+      return version;
+    } else {
+      return this.schema.version;
+    }
+  }
+
+  async getDBExists() {
+    return await DBUtils.checkDBExists(this.schema.dbName);
+  }
+
+  async openDatabase(newVersion = null) {
+    const dbExists = await this.getDBExists();
+
+    return new Promise(async (resolve, reject) => {
+
+      const currentVersion = await this.getCurrentVersion();
+
+      if (newVersion === null) {
+        newVersion = currentVersion;
+      }
+
+      const nextVersion = this.migrationManager.nextVersion(newVersion);
+      if (currentVersion < nextVersion && nextVersion <= this.schema.version) {        
+        this.openDatabase(nextVersion);
+      }
+
       let request = null;
 
       const openRequest = () => {
@@ -35,17 +48,15 @@ class IDBS {
 
         request.onsuccess = (event) => {
           const dbInstance = event.target.result;
-          console.log("(s) indexedDB is loaded version", dbInstance.version);
 
           resolve(dbInstance);
         };
 
-        request.onupgradeneeded = (event) => {
+        request.onupgradeneeded = async (event) => {
           const dbInstance = event.target.result;
-          console.log("(u) indexedDB is loaded version", dbInstance.version);
 
-          if (this.dbExists) {
-            this.runMigrations(dbInstance);
+          if (dbExists) {
+            this.migrationManager.run(dbInstance)
           } else {
             this.createTables(dbInstance);
           }
@@ -69,26 +80,6 @@ class IDBS {
     });
   }
 
-  runMigrations(dbInstance) {
-    const migrationManager = new MigrationManager(dbInstance);
-
-    const fromNumber = this.current_version;
-    const toNumber = this.schema.version;
-
-    // Perform migrations
-    migrationManager.migrate(fromNumber, toNumber)
-      .then(success => {
-        if (success) {
-          console.log(`${this.dbInstance.name} Migration completed successfully.`);
-        } else {
-          console.log(`${this.dbInstance.name} Database is already up-to-date.`);
-        }
-      })
-      .catch(error => {
-        console.error(`${this.dbInstance.name} Error occurred during migration:`, error);
-      });
-  }
-
   destroy() {
     return new Promise((resolve, reject) => {
       const request = window.indexedDB.deleteDatabase(this.schema.dbName);
@@ -99,13 +90,10 @@ class IDBS {
       };
 
       request.onsuccess = (event) => {
-        console.log("Database deleted successfully");
         resolve();
       };
     });
   }
-
-  // Add CRUD methods here
 }
 
 export default IDBS;

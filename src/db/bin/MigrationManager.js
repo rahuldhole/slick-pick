@@ -1,59 +1,48 @@
+import { default as MigrationClass } from '../Migration.js';
+
 export default class MigrationManager {
-  constructor(dbInstance) {
-    this.dbInstance = dbInstance;
-    this.folder = '../migrations'
+  constructor(migrations) {
+    this.migrations = migrations;
   }
 
-  async migrate(fromNumber, toNumber) {
-    if (fromNumber === toNumber) {
-      console.warn("Already migrated!");
-      return false;
-    }
+  // Check if a migration version exists
+  isVersionExist(version) {
+    return MigrationClass.derivedClasses.some(([_, v]) => v === version);
+  }
 
-    console.log("Migrating from ", fromNumber, " to ", toNumber);
+  // Get the next migration version
+  nextVersion(currentVersion) {
+    const nextMigration = MigrationClass.derivedClasses
+      .filter(([_, v]) => v > currentVersion)
+      .sort((a, b) => a[1] - b[1])[0];
+    return nextMigration ? nextMigration[1] : null;
+  }
 
-    // Start a transaction
-    const transaction = this.dbInstance.transaction(['migrations'], 'readwrite');
+  // Get the previous migration version
+  prevVersion(currentVersion) {
+    const prevMigration = MigrationClass.derivedClasses
+      .filter(([_, v]) => v < currentVersion)
+      .sort((a, b) => b[1] - a[1])[0];
+    return prevMigration ? prevMigration[1] : null;
+  }
 
-    // Get the migration object store
-    const migrationStore = transaction.objectStore('migrations');
+  // Execute migrations up to a specified version
+  async run(dbInstance) {
+    const migrationVersion = dbInstance.version;
 
-    // file name has number_name.js
-    const files = require.context(this.folder , true, /\.js$/);
+    const migrationsToRun = MigrationClass.derivedClasses
+      .filter(([_, version]) => version <= migrationVersion)
+      .sort((a, b) => a[1] - b[1]); // Sorting by version in ascending order
 
-    // Get keys and sort them in ascending order
-    const sortedKeys = files.keys().sort();
+    for (const [migrationClassName, version] of migrationsToRun) {
+      const matchingMigration = this.migrations.find(
+        migration => migration['default'].name === migrationClassName
+      );
 
-    // Filter keys based on version numbers
-    const filteredKeys = sortedKeys.filter(key => {
-      const fileName = key.split('/').pop().split('.')[0];
-      const parts = fileName.split('_');
-
-      if (parts.length < 2) {
-        console.error(`Error: File ${key} does not match the expected format. Use 'new Date.getTime()+"_"' prefix.`);
-        return false;
+      if (matchingMigration) {
+        const migrationInstance = new matchingMigration['default'](dbInstance);
+        await migrationInstance.migrate();
       }
-
-      const numberPart = parseInt(parts[0]);
-      return numberPart > fromNumber && numberPart <= toNumber;
-    });
-
-    try {
-      // Iterate through keys and execute migrations within the transaction
-      for (const key of filteredKeys) {
-        const migrationModule = await import(`$this.folder`+`${key.slice(1)}`);
-        const migration = new migrationModule.default;
-        await migration.up();
-      }
-
-      // Commit the transaction if all migrations succeed
-      await transaction.commit();
-      console.log("Migrations committed successfully.");
-    } catch (error) {
-      // Rollback the transaction if any migration fails
-      console.error("Error occurred during migration:", error);
-      transaction.abort();
-      console.log("Transaction rolled back due to migration error.");
     }
   }
 }
