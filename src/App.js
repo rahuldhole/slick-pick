@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import './App.css';
-import IDBSuit from './db/IDBSuit'
+import IDBSuit from './config/IDBSuit'
 
 // import rough from './rough/main';
 

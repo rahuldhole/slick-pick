@@ -1,12 +1,12 @@
 
 
-import IDBS from './index'; // package
+import { IDBS } from 'idbsuit'; // package
 
 // Change your Schema.js path
-import { Schema } from './Schema';
+import { Schema } from '../db/Schema';
 
 // change your migrations/ folder path
-const reqMigrations = require.context('./migrations', true, /\.js$/);
+const reqMigrations = require.context('../db/migrations/', true, /\.js$/);
 
 const migrationModules = reqMigrations.keys().map(key => reqMigrations(key));
 

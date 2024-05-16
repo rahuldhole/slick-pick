@@ -1,4 +1,5 @@
-import Migration from "../Migration";
+import { Migration } from "idbsuit";
+
 export default class ExampleThree extends Migration{
   static #_= this.newVersion(1714815400420);
 
